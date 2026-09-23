@@ -1,26 +1,21 @@
-# Development checklist
+# Checklist
 
 ## COMPLETE
-- Account signup/login on production HTTPS
-- Neon Postgres + Prisma schema
-- PWA Add to Home Screen
-- Maryland address form
-- Census geocode + Nominatim fallback
-- MD iMAP parcel lookup
-- MD iMAP + OSM building footprints
-- Multi-building selection
-- Footprint area/perimeter (measured)
-- Provenance + confidence records
-- HTML + PDF report of whatever exists
+- Production HTTPS PWA + auth + Neon
+- MD address/parcel/footprint pipeline
+- Honest measurement labels
+- Manual pitch fallback
+- EPT spatial subsetter (NOAA Anne Arundel 2020)
+- Independent v0.2.0 plane/pitch run on 1510 Devere (frozen)
 
 ## IN PROGRESS
-- Automatic pitch from LiDAR planes
-- True sloped surface from reconstructed facets
+- Facet polygons / true sloped area
+- Hosted worker hooked to Analyze button
+- Edge classification
 
 ## BLOCKED
-- In-request LAZ ingest (tiles ~100MB; needs worker + storage)
+- In-request LAZ on Vercel Hobby (tile decode + RAM)
 
-## NOT STARTED / HONESTLY UNAVAILABLE IN WEB TIER
-- Ridge/hip/valley classification from planes
-- Vegetation flags from first-return DSM
-- CV chimney/solar detection
+## NOT STARTED
+- Interactive reconstructed roof diagram
+- Broader MD validation set
