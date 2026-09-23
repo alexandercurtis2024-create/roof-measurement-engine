@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f4efe6;
+  --ink: #141921;
+  --muted: #5c6570;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100%;
+}
+
+.paper-grid {
+  background-image:
+    linear-gradient(rgba(20,25,33,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20,25,33,.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.origin-measured { background: #dcefe4; color: #1b5c38; }
+.origin-derived { background: #e3ebf8; color: #1d3f7a; }
+.origin-estimated { background: #f8ead2; color: #7a4b12; }
+.origin-unavailable { background: #ececec; color: #555; }
+.origin-manual { background: #eadff3; color: #5b2d7a; }
+
+.safe-bottom {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+input, select, textarea {
+  font-size: 16px !important;
+}
