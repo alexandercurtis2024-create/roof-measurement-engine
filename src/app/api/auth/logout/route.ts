@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
 import { destroySession } from "@/lib/auth";
+import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(req: Request) {
   await destroySession();
-  return NextResponse.json({ ok: true });
+  const origin = req.headers.get("origin") || "https://roof-measurement-engine.vercel.app";
+  return NextResponse.redirect(new URL("/", origin), 303);
 }
