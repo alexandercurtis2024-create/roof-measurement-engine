@@ -1,16 +1,49 @@
-import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
 import Link from "next/link";
+import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { Badge, Button, Card } from "@/components/ui";
+import { formatDistanceToNow } from "date-fns";
 
-export default async function AppHome() {
-  const session = await getSession();
-  if (!session) redirect("/login");
+export default async function DashboardPage() {
+  const user = await requireUser();
+  if (!user) return null;
+  const projects = await prisma.project.findMany({
+    where: { organizationId: user.organizationId },
+    include: { property: true },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
+  });
   return (
-    <div className="min-h-dvh px-5 py-8">
-      <p className="text-xs font-semibold uppercase tracking-widest text-copper-700">Maryland v0.1</p>
-      <h1 className="mt-2 text-2xl font-semibold">Hello, {session.name}</h1>
-      <p className="mt-2 text-sm text-ink-700/80">Account and database are live. Measurement workspace files are still uploading.</p>
-      <Link href="/" className="mt-6 inline-block rounded-xl bg-ink-950 px-4 py-3 text-sm font-semibold text-white">Home</Link>
+    <div className="space-y-5">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+          <p className="text-sm text-ink-700/70">Each address becomes a project with full provenance.</p>
+        </div>
+        <Button href="/app/new">New measurement</Button>
+      </div>
+      {projects.length === 0 ? (
+        <Card className="p-8 text-center">
+          <p className="text-ink-700/80">No projects yet. Enter a Maryland address to run the real GIS pipeline.</p>
+          <div className="mt-4"><Button href="/app/new">Start with an address</Button></div>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {projects.map((p) => (
+            <Link key={p.id} href={`/app/projects/${p.id}`}>
+              <Card className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">{p.property?.normalizedAddress || p.name}</div>
+                    <div className="mt-1 text-xs text-ink-700/60">Updated {formatDistanceToNow(p.updatedAt, { addSuffix: true })} · Engine {p.algorithmVersion}</div>
+                  </div>
+                  <Badge tone={p.status === "completed" ? "green" : p.status === "failed" ? "red" : "copper"}>{p.status.replaceAll("_", " ")}</Badge>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
