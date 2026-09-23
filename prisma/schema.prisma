@@ -1,0 +1,301 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  projects  Project[]
+  settings  OrganizationSetting?
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String       @unique
+  name           String
+  passwordHash   String
+  role           String       @default("contractor")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  projects       Project[]
+  edits          ManualEdit[]
+  jobs           ProcessingJob[]
+  audits         AuditEvent[]
+}
+
+model OrganizationSetting {
+  id                    String       @id @default(cuid())
+  organizationId        String       @unique
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  companyName           String?
+  wasteFactorDefault    Float        @default(0.12)
+  shingleBundlesPerSq   Float        @default(3)
+  starterLinearFtPerBdl Float        @default(105)
+  ridgeCapLinearFtPerBdl Float       @default(20)
+  underlaymentSqPerRoll Float        @default(4)
+  iceWaterSqFtPerRoll   Float        @default(200)
+  dripEdgeFtPerPiece    Float        @default(10)
+  updatedAt             DateTime     @updatedAt
+}
+
+model Project {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  name           String
+  status         String       @default("draft")
+  coverage       String       @default("unknown")
+  notes          String?
+  algorithmVersion String     @default("0.1.0")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  property       Property?
+  jobs           ProcessingJob[]
+  roofModel      RoofModel?
+  measurements   Measurement[]
+  materials      MaterialCalculation?
+  report         Report?
+  edits          ManualEdit[]
+  audits         AuditEvent[]
+  confidence     ConfidenceMetric[]
+}
+
+model Property {
+  id                 String   @id @default(cuid())
+  projectId          String   @unique
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  street             String
+  city               String
+  state              String
+  zip                String
+  normalizedAddress  String
+  county             String?
+  jurisdictionCode   String?
+  latitude           Float?
+  longitude          Float?
+  geocodeProvider    String?
+  geocodeQuality     String?
+  geocodeConfidence  Float?
+  geocodeMetadata    String?
+  parcelId           String?
+  parcelSource       String?
+  parcelGeometry     String?
+  parcelMetadata     String?
+  selectedBuildingId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  buildings          Building[]
+}
+
+model Building {
+  id             String   @id @default(cuid())
+  propertyId     String
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  source         String
+  sourceId       String?
+  geometry       String
+  footprintAreaSqFt Float?
+  centroidLat    Float?
+  centroidLon    Float?
+  distanceToAddressM Float?
+  rankScore      Float?
+  rankReason     String?
+  isPrimaryCandidate Boolean @default(false)
+  selected       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+}
+
+model DataSourceRecord {
+  id               String   @id @default(cuid())
+  projectId        String?
+  kind             String
+  provider         String
+  dataset          String
+  url              String?
+  coverage         String?
+  resolution       String?
+  acquisitionDate  String?
+  retrievedAt      DateTime @default(now())
+  attribution      String?
+  usageNotes       String?
+  qualityMetadata  String?
+  success          Boolean  @default(true)
+  error            String?
+}
+
+model ProcessingJob {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  status      String   @default("queued")
+  stage       String   @default("queued")
+  progress    Int      @default(0)
+  log         String   @default("[]")
+  error       String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RoofModel {
+  id                 String   @id @default(cuid())
+  projectId          String   @unique
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  algorithmVersion   String   @default("0.1.0")
+  method             String
+  sourceSummary      String
+  footprintAreaSqFt  Float?
+  surfaceAreaSqFt    Float?
+  squares            Float?
+  complexityClass    String?
+  complexityReason   String?
+  wasteRecommended   Float?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  facets             RoofFacet[]
+  edges              RoofEdge[]
+  features           RoofFeature[]
+}
+
+model RoofFacet {
+  id            String    @id @default(cuid())
+  roofModelId   String
+  roofModel     RoofModel @relation(fields: [roofModelId], references: [id], onDelete: Cascade)
+  code          String
+  geometry      String
+  planeEquation String?
+  slopeDegrees  Float?
+  pitchRise     Float?
+  azimuthDeg    Float?
+  surfaceAreaSqFt Float?
+  footprintAreaSqFt Float?
+  pointCount    Int?
+  residualError Float?
+  origin        String    @default("derived")
+  confidence    String    @default("low")
+  notes         String?
+}
+
+model RoofEdge {
+  id            String    @id @default(cuid())
+  roofModelId   String
+  roofModel     RoofModel @relation(fields: [roofModelId], references: [id], onDelete: Cascade)
+  code          String
+  type          String
+  geometry      String
+  lengthFt      Float
+  origin        String    @default("estimated")
+  confidence    String    @default("low")
+  method        String?
+  supportingFacets String?
+}
+
+model RoofFeature {
+  id          String    @id @default(cuid())
+  roofModelId String
+  roofModel   RoofModel @relation(fields: [roofModelId], references: [id], onDelete: Cascade)
+  type        String
+  geometry    String?
+  confidence  String    @default("unavailable")
+  notes       String?
+}
+
+model Measurement {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key         String
+  label       String
+  value       Float?
+  unit        String?
+  display     String
+  origin      String
+  confidence  String
+  method      String
+  sources     String
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MaterialCalculation {
+  id             String   @id @default(cuid())
+  projectId      String   @unique
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assumptionsJson String
+  resultsJson     String
+  updatedAt       DateTime @updatedAt
+}
+
+model ManualEdit {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  editorId    String?
+  editor      User?    @relation(fields: [editorId], references: [id])
+  field       String
+  original    String?
+  edited      String?
+  reason      String?
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  pdfPath     String?
+  generatedAt DateTime @default(now())
+  algorithmVersion String @default("0.1.0")
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id])
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  action      String
+  detail      String?
+  createdAt   DateTime @default(now())
+}
+
+model ConfidenceMetric {
+  id         String  @id @default(cuid())
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key        String
+  category   String
+  score      Float?
+  inputsJson String
+  explanation String
+}
+
+model CoverageCell {
+  id          String @id @default(cuid())
+  jurisdiction String
+  countyFips  String?
+  address     String @default("full")
+  parcel      String @default("full")
+  footprint   String @default("partial")
+  elevation   String @default("partial")
+  lidar       String @default("discoverable")
+  imagery     String @default("partial")
+  notes       String?
+}
