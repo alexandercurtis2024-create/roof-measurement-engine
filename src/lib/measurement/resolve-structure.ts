@@ -1,6 +1,3 @@
-import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
-import booleanIntersects from "@turf/boolean-intersects";
-import { point } from "@turf/helpers";
 import type { Feature, Polygon } from "geojson";
 import type { BuildingCandidate } from "../providers/types";
 import { distanceMeters } from "../geometry/geo";
@@ -22,22 +19,27 @@ export type StructureResolution = {
   reason: string;
 };
 
-function onParcel(b: BuildingCandidate, parcel: Feature<Polygon> | null | undefined) {
-  if (!parcel) return false;
-  try {
-    return booleanPointInPolygon(point([b.centroidLon, b.centroidLat]), parcel);
-  } catch {
-    return false;
-  }
+function ringOf(geom: Feature<Polygon> | Polygon | null | undefined): number[][] | null {
+  if (!geom) return null;
+  const coords = "geometry" in geom ? geom.geometry?.coordinates : (geom as Polygon).coordinates;
+  const ring = coords?.[0];
+  return Array.isArray(ring) ? (ring as number[][]) : null;
 }
 
-function touchesParcel(b: BuildingCandidate, parcel: Feature<Polygon> | null | undefined) {
-  if (!parcel) return false;
-  try {
-    return booleanIntersects(b.geometry, parcel);
-  } catch {
-    return false;
+function pointInRing(lon: number, lat: number, ring: number[][]) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    const hit = yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi + 1e-12) + xi;
+    if (hit) inside = !inside;
   }
+  return inside;
+}
+
+function onParcel(b: BuildingCandidate, parcel?: Feature<Polygon> | null) {
+  const ring = ringOf(parcel || undefined);
+  if (!ring) return false;
+  return pointInRing(b.centroidLon, b.centroidLat, ring);
 }
 
 export function resolveStructures(
@@ -49,10 +51,8 @@ export function resolveStructures(
     const dist = distanceMeters({ lon: c.centroidLon, lat: c.centroidLat }, address);
     const area = c.footprintAreaSqFt;
     const inside = onParcel(c, parcel);
-    const touches = touchesParcel(c, parcel);
     let score = 0;
     if (inside) score += 90;
-    else if (touches) score += 35;
     else if (parcel) score -= 50;
     score += Math.max(0, 45 - dist / 2);
     if (area >= 800 && area <= 12000) score += 28;
@@ -60,52 +60,41 @@ export function resolveStructures(
     else if (area >= 180 && area < 800) score += 6;
     else if (area < 180) score -= 15;
     if (c.source.startsWith("md_imap")) score += 6;
-    const reasons = [
-      inside ? "on parcel" : touches ? "touches parcel" : parcel ? "off parcel" : "no parcel",
-      `${Math.round(dist)} m from address`,
-      `${Math.round(area)} sq ft`,
-    ];
     return {
       ...c,
       distanceToAddressM: dist,
       rankScore: score,
-      rankReason: reasons.join(" · "),
-      onParcel: inside || touches,
+      rankReason: `${inside ? "on parcel" : parcel ? "off parcel" : "no parcel"} · ${Math.round(dist)} m · ${Math.round(area)} sq ft`,
+      onParcel: inside,
       role: "unknown" as const,
     };
   }).sort((a, b) => b.rankScore - a.rankScore);
 
-  const parcelSet = parcel ? scored.filter((b) => b.onParcel) : scored;
-  const pool = parcelSet.length ? parcelSet : scored;
-  const primary = pool[0] || null;
-  const accessories = pool.filter((b) => {
-    if (!primary || b.sourceId === primary.sourceId && b.centroidLon === primary.centroidLon) return false;
-    if (b === primary) return false;
-    return b.footprintAreaSqFt >= 180 && b.footprintAreaSqFt <= Math.max(1500, (primary.footprintAreaSqFt || 0) * 0.45);
-  });
-  const accessoryIds = new Set(accessories.map((a) => a.sourceId + ":" + a.centroidLon));
+  const pool = parcel ? scored.filter((b) => b.onParcel) : scored;
+  const use = pool.length ? pool : scored;
+  const primary = use[0] || null;
+  const accessories = use.filter((b) => primary && b !== primary && b.footprintAreaSqFt >= 180 && b.footprintAreaSqFt <= Math.max(1500, primary.footprintAreaSqFt * 0.45));
   const labeled = scored.map((b) => {
     if (primary && b.centroidLon === primary.centroidLon && b.centroidLat === primary.centroidLat) return { ...b, role: "primary" as const };
-    if (accessoryIds.has(b.sourceId + ":" + b.centroidLon)) return { ...b, role: "accessory" as const };
+    if (accessories.some((a) => a.centroidLon === b.centroidLon && a.centroidLat === b.centroidLat)) return { ...b, role: "accessory" as const };
     if (b.onParcel) return { ...b, role: "accessory" as const };
     return { ...b, role: "neighbor" as const };
   });
 
   let confidence: StructureResolution["confidence"] = "low";
   let reason = "Could not confidently identify the home.";
-  if (primary && parcel && primary.onParcel) {
-    const second = pool[1];
-    const gap = second ? primary.rankScore - second.rankScore : 99;
+  if (primary && primary.onParcel) {
+    const gap = use[1] ? primary.rankScore - use[1].rankScore : 99;
     if (primary.footprintAreaSqFt >= 700 && gap >= 18) {
       confidence = "high";
       reason = "Primary structure identified on the parcel.";
     } else {
       confidence = "moderate";
-      reason = "Likely home identified; confirmation available.";
+      reason = "Likely home identified on the parcel.";
     }
   } else if (primary && primary.footprintAreaSqFt >= 700 && primary.distanceToAddressM < 40) {
     confidence = "moderate";
-    reason = "No parcel polygon; nearest substantial structure used.";
+    reason = "Nearest substantial structure used.";
   }
 
   return {
