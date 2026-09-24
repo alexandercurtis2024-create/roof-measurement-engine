@@ -1,22 +1,35 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Badge, Button, Card, Field, Input, OriginBadge } from "@/components/ui";
+import { Button, Card, Input } from "@/components/ui";
 import { formatNumber } from "@/lib/utils";
-
 const PropertyMap = dynamic(() => import("@/components/PropertyMap").then((m) => m.PropertyMap), { ssr: false });
-
+function friendlyConfidence(c?: string) {
+  if (c === "high") return { title: "High confidence", body: "Good source data. Review before ordering materials." };
+  if (c === "moderate") return { title: "Review recommended", body: "Automatic result available. Verify before ordering." };
+  if (c === "low") return { title: "Verify manually", body: "Automatic data is thin. Check the roof before using these numbers." };
+  return null;
+}
 export function ProjectWorkspace({ payload }: { payload: any }) {
-  const { project, property, buildings, measurements, roofModel, materials, sources, confidence } = payload;
+  const { project, property, buildings, measurements, jobs } = payload;
   const [selected, setSelected] = useState(buildings.find((b: any) => b.selected)?.id || buildings[0]?.id || "");
-  const [pitch, setPitch] = useState(roofModel?.facets?.[0]?.pitchRise?.toString() || "");
-  const [waste, setWaste] = useState(roofModel?.wasteRecommended ? String(Math.round(roofModel.wasteRecommended * 100)) : "12");
+  const [pitch, setPitch] = useState("");
+  const [waste, setWaste] = useState("12");
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("summary");
   const [msg, setMsg] = useState("");
+  const [showVerify, setShowVerify] = useState(false);
+  const [jobSnap, setJobSnap] = useState(jobs?.[0] || null);
   const parsedBuildings = useMemo(() => buildings.map((b: any) => ({ ...b, geom: JSON.parse(b.geometry) })), [buildings]);
   const parcel = property.parcelGeometry ? JSON.parse(property.parcelGeometry) : null;
-
+  const chosen = parsedBuildings.find((b: any) => b.id === selected);
+  const lidarArea = measurements.find((m: any) => m.key === "lidar_roof_area");
+  const lidarSq = measurements.find((m: any) => m.key === "lidar_squares");
+  const lidarPitch = measurements.find((m: any) => m.key === "lidar_pitch");
+  const derivedArea = measurements.find((m: any) => m.key === "surface_area" || m.key === "roof_surface_area");
+  const areaDisplay = lidarArea?.display || derivedArea?.display;
+  const pitchDisplay = lidarPitch?.display && lidarPitch.display !== "unavailable" ? lidarPitch.display : pitch ? `${pitch}/12` : null;
+  const conf = friendlyConfidence(lidarArea?.confidence);
   async function runAnalysis() {
     if (!selected) return;
     setBusy(true); setMsg("");
@@ -25,100 +38,77 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
       body: JSON.stringify({ buildingId: selected, pitchRise: pitch ? Number(pitch) : null, waste: waste ? Number(waste) / 100 : null }),
     });
     const data = await res.json();
-    if (!res.ok) { setMsg(data.error || "Analysis failed"); setBusy(false); return; }
+    if (!res.ok) { setMsg(data.error || "Could not measure this roof."); setBusy(false); return; }
     window.location.reload();
   }
-
-  const tabs = ["overview", "model", "measurements", "materials", "confidence", "sources", "report"];
+  useEffect(() => {
+    let stop = false;
+    async function poll() {
+      const res = await fetch(`/api/measurement-jobs?projectId=${project.id}`);
+      if (!res.ok || stop) return;
+      const data = await res.json();
+      const latest = data.jobs?.[0];
+      if (latest) setJobSnap(latest);
+      if (latest && latest.status === "complete") window.location.reload();
+      else if (latest && latest.status !== "failed") setTimeout(poll, 4000);
+    }
+    if (jobSnap && !["complete", "failed"].includes(jobSnap.status)) poll();
+    return () => { stop = true; };
+  }, [project.id, jobSnap?.id, jobSnap?.status]);
+  const measuring = busy || (jobSnap && !["complete", "failed"].includes(jobSnap.status) && !lidarArea);
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-700">{property.county || "Maryland"}</div>
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">Confirm the roof</div>
         <h1 className="text-2xl font-semibold leading-tight">{property.normalizedAddress}</h1>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Badge>{project.status.replaceAll("_", " ")}</Badge>
-          <Badge tone="copper">Engine {project.algorithmVersion}</Badge>
-        </div>
       </div>
       {property.latitude && property.longitude ? (
         <PropertyMap lat={property.latitude} lon={property.longitude} parcel={parcel} selectedId={selected}
           buildings={parsedBuildings.map((b: any) => ({ id: b.id, geometry: b.geom, selected: b.id === selected }))} onSelect={setSelected} />
       ) : null}
-      <p className="text-[11px] text-ink-700/60">Imagery © Esri, Maxar. Mosaic date is not property-specific.</p>
       <Card className="p-4">
-        <h2 className="font-semibold">Select structure</h2>
-        <p className="mt-1 text-sm text-ink-700/70">Never silently measure the garage. Tap a footprint, then run analysis.</p>
-        <div className="mt-3 space-y-2">
-          {parsedBuildings.map((b: any) => (
-            <button key={b.id} onClick={() => setSelected(b.id)} className={`w-full rounded-xl p-3 text-left ring-1 ${selected === b.id ? "bg-copper-50 ring-copper-400" : "bg-white ring-black/10"}`}>
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-sm font-semibold">{b.source.replaceAll("_", " ")}</div>
-                <div className="text-sm">{formatNumber(b.footprintAreaSqFt, 0)} sq ft</div>
-              </div>
-              <div className="text-xs text-ink-700/60">{b.rankReason}</div>
-            </button>
-          ))}
-          {parsedBuildings.length === 0 ? <p className="text-sm text-red-800">No footprints found. Manual review required.</p> : null}
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <Field label="Manual pitch (rise/12)"><Input value={pitch} onChange={(e) => setPitch(e.target.value)} placeholder="Leave blank if unknown" inputMode="decimal" /></Field>
-          <Field label="Waste % override"><Input value={waste} onChange={(e) => setWaste(e.target.value)} inputMode="decimal" /></Field>
-        </div>
-        <Button className="mt-4 w-full" disabled={busy || !selected} onClick={runAnalysis}>{busy ? "Analyzing sources…" : "Analyze selected building"}</Button>
-        {msg ? <p className="mt-2 text-sm text-red-700">{msg}</p> : null}
+        <p className="text-sm text-ink-800">{parsedBuildings.length > 1 ? "We found more than one building. Tap the correct roof on the map." : "Is this the correct building?"}</p>
+        {chosen ? <p className="mt-2 text-sm font-medium">Selected footprint ≈ {formatNumber(chosen.footprintAreaSqFt, 0)} sq ft</p> : <p className="mt-2 text-sm text-red-800">No building outline found.</p>}
+        <Button className="mt-4 min-h-12 w-full text-base" disabled={busy || !selected} onClick={runAnalysis}>{busy ? "Starting measurement…" : "Measure roof"}</Button>
+        {msg ? <p className="mt-2 text-sm text-red-800">{msg}</p> : null}
       </Card>
+      {measuring ? (
+        <Card className="p-5">
+          <div className="text-lg font-semibold">Measuring roof</div>
+          <p className="mt-2 text-sm">You can leave this screen. Measurement keeps running.</p>
+        </Card>
+      ) : null}
+      {lidarArea || derivedArea ? (
+        <Card className="p-5">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">Measurement complete</div>
+          <div className="mt-3 text-5xl font-semibold tracking-tight">{areaDisplay?.replace(" sq ft", "")}</div>
+          <div className="text-sm font-medium text-ink-700/70">SQ FT</div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div><div className="text-xs font-semibold uppercase text-ink-700/60">Squares</div><div className="text-2xl font-semibold">{lidarSq?.display || "—"}</div></div>
+            <div><div className="text-xs font-semibold uppercase text-ink-700/60">Pitch</div><div className="text-2xl font-semibold">{pitchDisplay || "—"}</div></div>
+          </div>
+          {conf ? <div className="mt-4 rounded-xl bg-[#f4efe6] p-3"><div className="font-semibold">{conf.title}</div><p className="mt-1 text-sm">{conf.body}</p></div> : null}
+          <button className="mt-3 text-sm font-semibold text-copper-800" onClick={() => setShowVerify((v) => !v)}>Verify pitch manually</button>
+          {showVerify ? <div className="mt-3 flex gap-2"><Input value={pitch} onChange={(e) => setPitch(e.target.value)} placeholder="9" inputMode="decimal" /><Button onClick={runAnalysis}>Save</Button></div> : null}
+        </Card>
+      ) : null}
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {tabs.map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${tab === t ? "bg-ink-950 text-white" : "bg-white ring-1 ring-black/10"}`}>{t}</button>
+        {[["summary","Summary"],["roof","Roof"],["details","Details"],["materials","Materials"]].map(([id,label]) => (
+          <button key={id} onClick={() => setTab(id)} className={`min-h-10 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab===id?"bg-ink-950 text-white":"bg-white ring-1 ring-black/10"}`}>{label}</button>
         ))}
       </div>
-      {tab === "overview" && (
-        <Card className="space-y-3 p-4">
-          <p className="text-sm leading-6">Geocode: {property.geocodeProvider} · {property.geocodeQuality}. Parcel {property.parcelId || "not found"} via {property.parcelSource || "—"}.</p>
-          <p className="text-sm">{roofModel ? roofModel.method : "Select a building and run analysis to generate measurements."}</p>
-        </Card>
-      )}
-      {tab === "measurements" && (
-        <div className="space-y-2">
-          {measurements.map((m: any) => (
-            <Card key={m.key} className="p-4">
-              <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold">{m.label}</div><div className="text-lg">{m.display}</div></div><OriginBadge origin={m.origin} /></div>
-              <div className={`mt-1 text-xs conf-${m.confidence}`}>Confidence: {m.confidence.replaceAll("_", " ")}</div>
-              <p className="mt-2 text-xs leading-5 text-ink-700/70">{m.method}</p>
-            </Card>
-          ))}
-        </div>
-      )}
-      {tab === "materials" && (
-        <Card className="space-y-3 p-4">
-          {materials ? (
-            <>
-              <p className="text-sm leading-6">{materials.note}</p>
-              {(materials.lines || []).map((l: any) => (
-                <div key={l.item} className="flex items-center justify-between border-b border-black/5 py-2 text-sm">
-                  <div><div className="font-semibold">{l.item}</div><div className="text-xs text-ink-700/60">{l.basis}</div></div>
-                  <div className="text-right"><div>{l.qty ?? "—"} {l.unit}</div><OriginBadge origin={l.origin} /></div>
-                </div>
-              ))}
-            </>
-          ) : <p className="text-sm">Run analysis first.</p>}
-        </Card>
-      )}
-      {tab === "confidence" && confidence.map((c: any) => (
-        <Card key={c.id} className="p-4"><div className="text-sm font-semibold capitalize">{c.key}</div><p className="mt-2 text-sm leading-6">{c.explanation}</p></Card>
+      {tab==="summary" && <Card className="p-4 text-sm"><p>Tap the house on the map, then Measure roof.</p></Card>}
+      {tab==="roof" && <Card className="p-4 text-sm"><p>The highlighted outline is the selected building.</p></Card>}
+      {tab==="details" && measurements.filter((m: any) => !["ridge","hip","valley","eave","rake"].some((k) => m.key.includes(k))).map((m: any) => (
+        <Card key={m.key} className="p-4"><div className="text-sm font-semibold">{m.label}</div><div className="text-xl font-semibold">{m.display}</div></Card>
       ))}
-      {tab === "sources" && sources.map((s: any) => (
-        <Card key={s.id} className="p-4 text-sm"><div className="font-semibold">{s.dataset}</div><div className="text-xs uppercase text-ink-700/60">{s.kind} · {s.provider}</div><p className="mt-2 text-xs">{s.attribution}</p></Card>
-      ))}
-      {tab === "model" && (
-        <Card className="space-y-3 p-4">
-          <p className="text-sm">v0.1 uses the measured footprint as facet F1. Plane splitting requires LiDAR, which is discovered but not auto-ingested in the web request.</p>
-        </Card>
-      )}
-      {tab === "report" && (
-        <Card className="space-y-3 p-4">
-          <Button href={`/app/projects/${project.id}/report`} className="w-full">Open report</Button>
-          <Button href={`/api/projects/${project.id}/report.pdf`} variant="secondary" className="w-full">Download PDF</Button>
+      {tab==="materials" && (
+        <Card className="space-y-4 p-4">
+          <div><div className="text-xs font-semibold uppercase text-ink-700/60">Base squares</div><div className="text-3xl font-semibold">{lidarSq?.display || "—"}</div></div>
+          <div className="flex flex-wrap gap-2">{["10","12","15"].map((w) => (
+            <button key={w} onClick={() => setWaste(w)} className={`min-h-11 rounded-full px-4 text-sm font-semibold ${waste===w?"bg-ink-950 text-white":"bg-white ring-1 ring-black/10"}`}>{w}%</button>
+          ))}</div>
+          {lidarSq?.display ? <div><div className="text-xs font-semibold uppercase text-ink-700/60">Ordering squares</div><div className="text-3xl font-semibold">{(Number(lidarSq.display)*(1+Number(waste||0)/100)).toFixed(2)}</div></div> : <p className="text-sm">Measure the roof first.</p>}
         </Card>
       )}
     </div>
