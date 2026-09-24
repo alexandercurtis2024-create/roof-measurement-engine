@@ -22,7 +22,8 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
   const [msg, setMsg] = useState("");
   const [showVerify, setShowVerify] = useState(false);
   const [showMap, setShowMap] = useState(project.status === "needs_building_selection");
-  const [jobSnap, setJobSnap] = useState(jobs?.[0] || null);
+  const liveJobs = (jobs || []).filter((j: any) => j.stage !== "footprint_retrieved");
+  const [jobSnap, setJobSnap] = useState(liveJobs[0] || null);
   const parsedBuildings = useMemo(() => buildings.map((b: any) => ({ ...b, geom: JSON.parse(b.geometry) })), [buildings]);
   const parcel = property.parcelGeometry ? JSON.parse(property.parcelGeometry) : null;
   const chosen = parsedBuildings.find((b: any) => b.id === selected);
@@ -41,7 +42,8 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
     });
     const data = await res.json();
     if (!res.ok) { setMsg(data.error || "Could not measure this roof."); setBusy(false); return; }
-    window.location.reload();
+    setJobSnap({ id: data.lidarJobId, status: "queued", stage: "queued" });
+    setBusy(false);
   }
   useEffect(() => {
     let stop = false;
@@ -53,6 +55,7 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
       if (latest) setJobSnap(latest);
       if (latest && latest.status === "complete") window.location.reload();
       else if (latest && latest.status !== "failed") setTimeout(poll, 4000);
+      else if (latest && latest.status === "failed") setMsg("Measurement could not finish. Try Measure roof again.");
     }
     if (jobSnap && !["complete", "failed"].includes(jobSnap.status)) poll();
     return () => { stop = true; };
@@ -71,17 +74,17 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
       <Card className="p-4">
         {chosen ? <p className="text-sm">Main home · about {formatNumber(chosen.footprintAreaSqFt, 0)} sq ft footprint</p> : <p className="text-sm text-red-800">We could not identify a building automatically.</p>}
         {accessories.length ? <p className="mt-2 text-sm">Also on this property: {accessories.length} additional building{accessories.length === 1 ? "" : "s"}. Measuring the main home only.</p> : null}
-        <Button className="mt-4 min-h-12 w-full text-base" disabled={busy || !selected} onClick={runAnalysis}>{busy ? "Starting measurement…" : "Measure roof"}</Button>
+        <Button className="mt-4 min-h-12 w-full text-base" disabled={busy || measuring || !selected} onClick={runAnalysis}>{measuring ? "Measuring…" : "Measure roof"}</Button>
         <button className="mt-3 text-sm font-semibold text-copper-800" onClick={() => setShowMap((v) => !v)}>{showMap ? "Hide map" : "Change building"}</button>
         {msg ? <p className="mt-2 text-sm text-red-800">{msg}</p> : null}
       </Card>
       {measuring ? (
         <Card className="p-5">
           <div className="text-lg font-semibold">Measuring roof</div>
-          <p className="mt-2 text-sm">You can leave this screen. Measurement keeps running.</p>
+          <p className="mt-2 text-sm">Stay on this screen or leave — the measurement keeps running. This usually takes about a minute.</p>
         </Card>
       ) : null}
-      {lidarArea ? (
+      {lidarArea && !measuring ? (
         <Card className="p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">Measurement complete</div>
           <div className="mt-3 text-5xl font-semibold tracking-tight">{areaDisplay?.replace(" sq ft", "")}</div>
@@ -100,7 +103,7 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
           <button key={id} onClick={() => setTab(id)} className={`min-h-10 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab===id?"bg-ink-950 text-white":"bg-white ring-1 ring-black/10"}`}>{label}</button>
         ))}
       </div>
-      {tab==="summary" && <Card className="p-4 text-sm"><p>The home was selected automatically. Tap Measure roof.</p></Card>}
+      {tab==="summary" && <Card className="p-4 text-sm"><p>{measuring ? "Measurement is running." : "The home was selected automatically. Tap Measure roof."}</p></Card>}
       {tab==="roof" && <Card className="p-4 text-sm"><p>Use Change building only if the wrong structure was selected.</p></Card>}
       {tab==="details" && measurements.filter((m: any) => !["ridge","hip","valley","eave","rake"].some((k) => m.key.includes(k))).map((m: any) => (
         <Card key={m.key} className="p-4"><div className="text-sm font-semibold">{m.label}</div><div className="text-xl font-semibold">{m.display}</div></Card>
