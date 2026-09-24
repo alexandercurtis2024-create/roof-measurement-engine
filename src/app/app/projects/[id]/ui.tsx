@@ -12,22 +12,24 @@ function friendlyConfidence(c?: string) {
 }
 export function ProjectWorkspace({ payload }: { payload: any }) {
   const { project, property, buildings, measurements, jobs } = payload;
-  const [selected, setSelected] = useState(buildings.find((b: any) => b.selected)?.id || buildings[0]?.id || "");
+  const primary = buildings.find((b: any) => b.selected) || buildings.find((b: any) => b.isPrimaryCandidate) || buildings[0];
+  const accessories = buildings.filter((b: any) => primary && b.id !== primary.id && (b.rankReason || "").includes("on parcel") && b.footprintAreaSqFt < (primary.footprintAreaSqFt || 99999) * 0.5);
+  const [selected, setSelected] = useState(primary?.id || "");
   const [pitch, setPitch] = useState("");
   const [waste, setWaste] = useState("12");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("summary");
   const [msg, setMsg] = useState("");
   const [showVerify, setShowVerify] = useState(false);
+  const [showMap, setShowMap] = useState(project.status === "needs_building_selection");
   const [jobSnap, setJobSnap] = useState(jobs?.[0] || null);
   const parsedBuildings = useMemo(() => buildings.map((b: any) => ({ ...b, geom: JSON.parse(b.geometry) })), [buildings]);
   const parcel = property.parcelGeometry ? JSON.parse(property.parcelGeometry) : null;
   const chosen = parsedBuildings.find((b: any) => b.id === selected);
-  const lidarArea = measurements.find((m: any) => m.key === "lidar_roof_area");
+  const lidarArea = measurements.find((m: any) => m.key === "lidar_roof_area" && m.display && m.display !== "Unavailable");
   const lidarSq = measurements.find((m: any) => m.key === "lidar_squares");
   const lidarPitch = measurements.find((m: any) => m.key === "lidar_pitch");
-  const derivedArea = measurements.find((m: any) => m.key === "surface_area" || m.key === "roof_surface_area");
-  const areaDisplay = lidarArea?.display || derivedArea?.display;
+  const areaDisplay = lidarArea?.display;
   const pitchDisplay = lidarPitch?.display && lidarPitch.display !== "unavailable" ? lidarPitch.display : pitch ? `${pitch}/12` : null;
   const conf = friendlyConfidence(lidarArea?.confidence);
   async function runAnalysis() {
@@ -59,17 +61,18 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">Confirm the roof</div>
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">Property found</div>
         <h1 className="text-2xl font-semibold leading-tight">{property.normalizedAddress}</h1>
       </div>
-      {property.latitude && property.longitude ? (
+      {showMap && property.latitude && property.longitude ? (
         <PropertyMap lat={property.latitude} lon={property.longitude} parcel={parcel} selectedId={selected}
           buildings={parsedBuildings.map((b: any) => ({ id: b.id, geometry: b.geom, selected: b.id === selected }))} onSelect={setSelected} />
       ) : null}
       <Card className="p-4">
-        <p className="text-sm text-ink-800">{parsedBuildings.length > 1 ? "We found more than one building. Tap the correct roof on the map." : "Is this the correct building?"}</p>
-        {chosen ? <p className="mt-2 text-sm font-medium">Selected footprint ≈ {formatNumber(chosen.footprintAreaSqFt, 0)} sq ft</p> : <p className="mt-2 text-sm text-red-800">No building outline found.</p>}
+        {chosen ? <p className="text-sm">Main home · about {formatNumber(chosen.footprintAreaSqFt, 0)} sq ft footprint</p> : <p className="text-sm text-red-800">We could not identify a building automatically.</p>}
+        {accessories.length ? <p className="mt-2 text-sm">Also on this property: {accessories.length} additional building{accessories.length === 1 ? "" : "s"}. Measuring the main home only.</p> : null}
         <Button className="mt-4 min-h-12 w-full text-base" disabled={busy || !selected} onClick={runAnalysis}>{busy ? "Starting measurement…" : "Measure roof"}</Button>
+        <button className="mt-3 text-sm font-semibold text-copper-800" onClick={() => setShowMap((v) => !v)}>{showMap ? "Hide map" : "Change building"}</button>
         {msg ? <p className="mt-2 text-sm text-red-800">{msg}</p> : null}
       </Card>
       {measuring ? (
@@ -78,7 +81,7 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
           <p className="mt-2 text-sm">You can leave this screen. Measurement keeps running.</p>
         </Card>
       ) : null}
-      {lidarArea || derivedArea ? (
+      {lidarArea ? (
         <Card className="p-5">
           <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">Measurement complete</div>
           <div className="mt-3 text-5xl font-semibold tracking-tight">{areaDisplay?.replace(" sq ft", "")}</div>
@@ -97,8 +100,8 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
           <button key={id} onClick={() => setTab(id)} className={`min-h-10 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${tab===id?"bg-ink-950 text-white":"bg-white ring-1 ring-black/10"}`}>{label}</button>
         ))}
       </div>
-      {tab==="summary" && <Card className="p-4 text-sm"><p>Tap the house on the map, then Measure roof.</p></Card>}
-      {tab==="roof" && <Card className="p-4 text-sm"><p>The highlighted outline is the selected building.</p></Card>}
+      {tab==="summary" && <Card className="p-4 text-sm"><p>The home was selected automatically. Tap Measure roof.</p></Card>}
+      {tab==="roof" && <Card className="p-4 text-sm"><p>Use Change building only if the wrong structure was selected.</p></Card>}
       {tab==="details" && measurements.filter((m: any) => !["ridge","hip","valley","eave","rake"].some((k) => m.key.includes(k))).map((m: any) => (
         <Card key={m.key} className="p-4"><div className="text-sm font-semibold">{m.label}</div><div className="text-xl font-semibold">{m.display}</div></Card>
       ))}
