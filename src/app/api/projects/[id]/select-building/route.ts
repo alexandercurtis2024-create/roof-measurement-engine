@@ -19,11 +19,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const project = await prisma.project.findFirst({
     where: { id, organizationId: user.organizationId },
-    include: { property: { include: { buildings: true } } },
+    include: { property: { include: { buildings: true } }, jobs: { orderBy: { createdAt: "desc" }, take: 8 } },
   });
   if (!project?.property) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const building = project.property.buildings.find((b) => b.id === buildingId);
   if (!building) return NextResponse.json({ error: "Building not found" }, { status: 404 });
+
+  const active = project.jobs.find((j) => j.stage !== "footprint_retrieved" && ["queued", "claimed", "running"].includes(j.status));
+  if (active && !pitchRise) {
+    return NextResponse.json({ ok: true, lidarJobId: active.id, lidarJob: "already_running", reused: true });
+  }
 
   await prisma.building.updateMany({ where: { propertyId: project.property.id }, data: { selected: false } });
   await prisma.building.update({ where: { id: building.id }, data: { selected: true } });
@@ -73,7 +78,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       status: "queued",
       stage: "queued",
       progress: 0,
-      log: JSON.stringify([{ t: new Date().toISOString(), msg: "Automatic roof measurement queued." }]),
+      log: JSON.stringify([{
+        t: new Date().toISOString(),
+        msg: "queued",
+        targetBuildingId: building.id,
+        footprintSqFt: building.footprintAreaSqFt,
+        centroid: { lon: building.centroidLon, lat: building.centroidLat },
+        engine: "v1.0.0-cand",
+      }]),
     },
   });
   const dispatched = await dispatchLidarJob(lidarJob.id);
