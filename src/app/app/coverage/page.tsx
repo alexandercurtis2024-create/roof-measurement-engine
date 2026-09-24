@@ -1,31 +1,27 @@
-import { Card, Badge } from "@/components/ui";
-import { COUNTY_COVERAGE, MARYLAND_STATE, coverageLabel } from "@/lib/providers/coverage";
-
+"use client";
+import { useState } from "react";
+import { Button, Card, Input } from "@/components/ui";
 export default function CoveragePage() {
+  const [line, setLine] = useState("");
+  const [out, setOut] = useState("");
+  function check(e: React.FormEvent) {
+    e.preventDefault();
+    const md = /\bMD\b/i.test(line) || /maryland/i.test(line);
+    setOut(md ? "Automatic roof measurement is available in Maryland. Confirm the house on the map after you search." : "Automatic measurement is Maryland-only right now.");
+  }
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-lg space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold">Maryland coverage registry</h1>
-        <p className="text-sm text-ink-700/70">Verified public services. County-specific authoritative footprints are not assumed.</p>
+        <h1 className="text-2xl font-semibold">Can this address be measured?</h1>
+        <p className="text-sm text-ink-700/70">Maryland properties can use automatic roof measurement.</p>
       </div>
-      <Card className="space-y-2 p-4">
-        <div className="font-semibold">{MARYLAND_STATE.name}</div>
-        <p className="text-sm leading-6">{MARYLAND_STATE.notes}</p>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="green">{coverageLabel(MARYLAND_STATE.address)}</Badge>
-          <Badge tone="copper">{coverageLabel(MARYLAND_STATE.footprint)}</Badge>
-          <Badge tone="copper">{coverageLabel(MARYLAND_STATE.lidar)}</Badge>
-        </div>
+      <Card className="p-5">
+        <form onSubmit={check} className="space-y-3">
+          <Input value={line} onChange={(e) => setLine(e.target.value)} placeholder="123 Main Street, Annapolis, MD" />
+          <Button className="w-full">Check address</Button>
+        </form>
+        {out ? <p className="mt-4 text-sm font-medium">{out}</p> : null}
       </Card>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {COUNTY_COVERAGE.map((c) => (
-          <Card key={c.code} className="p-4">
-            <div className="font-semibold">{c.name}</div>
-            <div className="mt-1 text-xs text-ink-700/60">{c.code}</div>
-            <p className="mt-2 text-sm">{c.notes}</p>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }
