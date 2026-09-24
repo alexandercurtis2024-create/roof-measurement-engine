@@ -1,0 +1,13 @@
+{
+  "id": "devere_1510",
+  "address": "1510 Devere Dr, Pasadena, MD 21122",
+  "lon": -76.489366186815,
+  "lat": 39.138663390647,
+  "engine": "v1.0.0-cand",
+  "frozen_area_sqft": 3486.2838696178574,
+  "frozen_squares": 34.86283869617857,
+  "frozen_pitch_rise": 8.72912380851891,
+  "frozen_facets": 21,
+  "frozen_roof_points": 2872,
+  "eagleview_eval_only": { "area_sqft": 3515, "pitch": "9/12", "report": "72480732" }
+}

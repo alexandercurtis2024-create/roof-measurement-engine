@@ -1,0 +1,20 @@
+{
+  "id": "carnoustie_1638",
+  "address": "1638 Carnoustie Dr, Pasadena, MD 21122",
+  "lon": -76.4816045,
+  "lat": 39.130015,
+  "engine": "v1.0.0-cand",
+  "frozen_area_sqft": 4960.831683479321,
+  "frozen_squares": 49.608316834793214,
+  "frozen_pitch_rise": 8.393542535220954,
+  "frozen_facets": 25,
+  "frozen_roof_points": 4022,
+  "production_auto_2026_09_24": {
+    "area_sqft": 4690,
+    "squares": 46.9,
+    "pitch_display": "≈9/12",
+    "footprint_sqft": 3630,
+    "unmasked_contaminated_sqft": 6015
+  },
+  "eagleview_eval_only": { "area_sqft": 5030, "pitch": "8/12", "report": "72558723" }
+}
