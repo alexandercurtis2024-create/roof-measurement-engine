@@ -6,7 +6,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!workerAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const claimed = await prisma.processingJob.updateMany({
-    where: { id, status: "queued" },
+    where: { id, status: { in: ["queued", "claimed", "failed"] } },
     data: { status: "claimed", stage: "claimed", startedAt: new Date(), progress: 5 },
   });
   if (claimed.count !== 1) return NextResponse.json({ error: "not_claimable" }, { status: 409 });
