@@ -35,7 +35,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   });
   if (!job?.project.property) return NextResponse.json({ error: "no_property" }, { status: 422 });
   const p = job.project.property;
-  const selected = p.buildings.find((b) => b.selected) || p.buildings[0];
+  const selected = p.buildings.find((b) => b.selected) || p.buildings.find((b) => b.isPrimaryCandidate) || p.buildings[0];
+  const neighbors = p.buildings.filter((b) => selected && b.id !== selected.id && (b.rankReason || "").includes("off parcel"));
   const c = centroidOf(selected?.geometry || null, p.longitude, p.latitude);
   return NextResponse.json({
     id: job.id,
@@ -43,6 +44,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     lat: c.lat,
     address: p.normalizedAddress,
     buildingId: selected?.id || null,
+    targetGeometry: selected?.geometry ? JSON.parse(selected.geometry) : null,
+    neighborGeometries: neighbors.map((b) => JSON.parse(b.geometry)),
     engine: "v1.0.0-cand",
   });
 }
