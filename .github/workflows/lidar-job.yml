@@ -1,0 +1,30 @@
+name: lidar-job
+on:
+  repository_dispatch:
+    types: [lidar-job]
+  workflow_dispatch:
+    inputs:
+      jobId:
+        description: Measurement job id
+        required: true
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: deps
+        run: pip install --quiet numpy scipy shapely pyproj laspy lazrs
+      - name: run frozen engine
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+          JOB_ID: ${{ github.event.client_payload.jobId || inputs.jobId }}
+        run: |
+          if [ -z "$JOB_ID" ]; then echo missing job id; exit 1; fi
+          if [ -z "$APP_BASE_URL" ] || [ -z "$WORKER_SECRET" ]; then echo missing secrets; exit 1; fi
+          cd services/lidar-worker
+          python worker.py "$JOB_ID"
