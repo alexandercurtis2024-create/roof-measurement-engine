@@ -29,12 +29,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: located.ok ? "Geocode failed" : located.error, logs: located.logs }, { status: 422 });
   }
   const g = located.geocode;
+  const resolved = located.resolution;
+  const auto = resolved?.confidence === "high" || resolved?.confidence === "moderate";
   const project = await prisma.project.create({
     data: {
       organizationId: user.organizationId,
       createdById: user.id,
       name: g.matchedAddress,
-      status: located.buildings.length === 0 ? "needs_review" : "needs_building_selection",
+      status: !located.buildings.length ? "needs_review" : auto ? "ready_to_measure" : "needs_building_selection",
       coverage: located.coverage,
       algorithmVersion: ALGORITHM_VERSION,
       property: {
@@ -44,23 +46,26 @@ export async function POST(req: Request) {
           county: located.jurisdiction.name, jurisdictionCode: located.parcel?.jurisdictionCode,
           latitude: g.lat, longitude: g.lon, geocodeProvider: g.provider,
           geocodeQuality: g.quality, geocodeConfidence: g.confidence,
-          geocodeMetadata: JSON.stringify(g.metadata),
+          geocodeMetadata: JSON.stringify({ ...g.metadata, resolution: { confidence: resolved?.confidence, reason: resolved?.reason } }),
           parcelId: located.parcel?.parcelId, parcelSource: located.parcel?.provider,
           parcelGeometry: located.parcel?.geometry ? JSON.stringify(located.parcel.geometry) : null,
           parcelMetadata: located.parcel ? JSON.stringify(located.parcel.metadata) : null,
           buildings: {
-            create: located.buildings.map((b, i) => ({
-              source: b.source, sourceId: b.sourceId, geometry: JSON.stringify(b.geometry),
-              footprintAreaSqFt: b.footprintAreaSqFt, centroidLat: b.centroidLat, centroidLon: b.centroidLon,
-              distanceToAddressM: b.distanceToAddressM, rankScore: b.rankScore, rankReason: b.rankReason,
-              isPrimaryCandidate: i === 0, selected: false,
-            })),
+            create: located.buildings.map((b) => {
+              const isPrimary = !!(resolved?.primary && b.centroidLon === resolved.primary.centroidLon && b.centroidLat === resolved.primary.centroidLat);
+              return {
+                source: b.source, sourceId: b.sourceId, geometry: JSON.stringify(b.geometry),
+                footprintAreaSqFt: b.footprintAreaSqFt, centroidLat: b.centroidLat, centroidLon: b.centroidLon,
+                distanceToAddressM: b.distanceToAddressM, rankScore: b.rankScore, rankReason: b.rankReason,
+                isPrimaryCandidate: isPrimary, selected: auto && isPrimary,
+              };
+            }),
           },
         },
       },
       jobs: { create: { createdById: user.id, status: "complete", stage: "footprint_retrieved", progress: 40, log: JSON.stringify(located.logs), finishedAt: new Date() } },
-      audits: { create: { userId: user.id, action: "project.created", detail: g.matchedAddress } },
+      audits: { create: { userId: user.id, action: "project.created", detail: `${g.matchedAddress} [${resolved?.confidence || "none"}]` } },
     },
   });
-  return NextResponse.json({ id: project.id, logs: located.logs });
+  return NextResponse.json({ id: project.id, logs: located.logs, confidence: resolved?.confidence });
 }
