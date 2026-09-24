@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { analyzeBuilding } from "@/lib/pipeline/analyze";
 import type { Feature, Polygon } from "geojson";
 import { ALGORITHM_VERSION } from "@/lib/constants";
+import { dispatchLidarJob } from "@/lib/lidar/dispatch";
 
 export const maxDuration = 60;
 
@@ -62,25 +63,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     create: { projectId: project.id, resultsJson: JSON.stringify(analysis.materials), assumptionsJson: JSON.stringify({ pitchRise, waste }) },
   });
 
-  await prisma.confidenceMetric.deleteMany({ where: { projectId: project.id } });
-  await prisma.confidenceMetric.createMany({
-    data: [
-      { projectId: project.id, key: "geocode", category: (project.property.geocodeConfidence ?? 0) >= 0.75 ? "moderate" : "low", score: project.property.geocodeConfidence ?? 0, inputsJson: JSON.stringify({ provider: project.property.geocodeProvider }), explanation: "Census interpolates along TIGER address ranges. Confirm the pin on the map." },
-      { projectId: project.id, key: "footprint", category: building.source.includes("microsoft") ? "low" : "moderate", score: building.source.includes("microsoft") ? 0.35 : 0.55, inputsJson: JSON.stringify({ source: building.source }), explanation: "Footprints are computer-generated or volunteer-mapped. Not a field survey." },
-      { projectId: project.id, key: "pitch", category: pitchRise ? "manual_verification_required" : "unavailable", score: pitchRise ? 0.4 : 0, inputsJson: JSON.stringify({ lidarTiles: analysis.elevation.lidar.length }), explanation: pitchRise ? "Pitch was entered manually." : "No DSM / classified roof points ingested. Pitch left unavailable." },
-    ],
-  });
-
-  await prisma.dataSourceRecord.createMany({
-    data: [
-      { projectId: project.id, kind: "geocode", provider: project.property.geocodeProvider || "unknown", dataset: "Address geocode", attribution: "U.S. Census Bureau and/or Nominatim" },
-      { projectId: project.id, kind: "footprint", provider: building.source, dataset: building.sourceId || "building footprint", attribution: building.source.includes("microsoft") ? "MD iMAP, DoIT, Microsoft US Building Footprints" : "© OpenStreetMap contributors" },
-      ...analysis.elevation.groundSamples.map((s) => ({ projectId: project.id, kind: "elevation", provider: s.provider, dataset: s.dataset, acquisitionDate: s.acquisitionDate, resolution: s.resolution, attribution: s.provider === "usgs_epqs" ? "USGS 3DEP EPQS" : "MD iMAP LiDAR DEM" })),
-      ...analysis.elevation.lidar.slice(0, 5).map((l) => ({ projectId: project.id, kind: "lidar", provider: l.provider, dataset: l.title, url: l.downloadUrl, usageNotes: l.notes, attribution: "USGS The National Map — Lidar Point Cloud" })),
-    ],
-  });
-
   await prisma.project.update({ where: { id: project.id }, data: { status: pitchRise ? "completed" : "needs_review", algorithmVersion: ALGORITHM_VERSION } });
   await prisma.auditEvent.create({ data: { projectId: project.id, userId: user.id, action: "building.selected", detail: building.id } });
-  return NextResponse.json({ ok: true, roofModelId: model.id });
+
+  const lidarJob = await prisma.processingJob.create({
+    data: {
+      projectId: project.id,
+      createdById: user.id,
+      status: "queued",
+      stage: "queued",
+      progress: 0,
+      log: JSON.stringify([{ t: new Date().toISOString(), msg: "Automatic roof measurement queued." }]),
+    },
+  });
+  const dispatched = await dispatchLidarJob(lidarJob.id);
+
+  return NextResponse.json({
+    ok: true,
+    roofModelId: model.id,
+    lidarJobId: lidarJob.id,
+    lidarJob: dispatched.ok ? "dispatched" : "queued",
+    dispatchReason: dispatched.ok ? null : dispatched.reason,
+  });
 }
