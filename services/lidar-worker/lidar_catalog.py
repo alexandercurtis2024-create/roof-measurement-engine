@@ -1,12 +1,11 @@
 """Public Maryland LiDAR catalogs. Selection is by location, not by reference measurements."""
 from __future__ import annotations
 
-# west, south, east, north. Newer building-class tiles rank first.
 DATASETS = [
     {"id": "noaa-10311-anne-arundel-2020", "county": "Anne Arundel", "year": 2020, "building_class": True,
      "url": "https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/entwine/geoid18/10311/ept.json",
      "bbox": [-76.85, 38.72, -76.36, 39.24]},
-    {"id": "noaa-10312-charles-2023", "county": "Charles", "year": 2023, "building_class": True,
+    {"id": "noaa-10312-charles-2023", "county": "Charles", "year": 2023, "building_class": False,
      "url": "https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/entwine/geoid18/10312/ept.json",
      "bbox": [-77.25, 38.25, -76.70, 38.75]},
     {"id": "usgs-de-statewide-2023", "county": "Eastern Shore", "year": 2023, "building_class": False,
@@ -21,9 +20,9 @@ DATASETS = [
     {"id": "noaa-9235-montgomery-pg-2018", "county": "Prince George's", "year": 2018, "building_class": False,
      "url": "https://noaa-nos-coastal-lidar-pds.s3.amazonaws.com/entwine/geoid18/9235/ept.json",
      "bbox": [-77.25, 38.53, -76.65, 39.15]},
-    {"id": "usgs-md-western-1-2021", "county": "Western", "year": 2021, "building_class": False,
+    {"id": "usgs-md-western-1-2021", "county": "Garrett", "year": 2021, "building_class": False,
      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MD_Western_1_D21/ept.json",
-     "bbox": [-79.06, 39.24, -78.00, 39.74]},
+     "bbox": [-79.50, 39.18, -78.00, 39.74]},
     {"id": "usgs-md-western-2-2021", "county": "Western", "year": 2021, "building_class": False,
      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MD_Western_2_D21/ept.json",
      "bbox": [-78.02, 39.13, -77.83, 39.73]},
@@ -41,7 +40,7 @@ DATASETS = [
      "bbox": [-79.08, 39.42, -78.32, 39.74]},
     {"id": "usgs-md-washington-2012", "county": "Washington", "year": 2012, "building_class": False,
      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MD_FEMA_WashingtonCounty_2012/ept.json",
-     "bbox": [-78.36, 39.31, -77.76, 39.74]},
+     "bbox": [-78.36, 39.31, -77.45, 39.74]},
     {"id": "usgs-md-worcester-2011", "county": "Worcester", "year": 2011, "building_class": False,
      "url": "https://s3-us-west-2.amazonaws.com/usgs-lidar-public/MD_FEMA_WorcesterCo_2011/ept.json",
      "bbox": [-75.32, 38.01, -75.04, 38.46]},
