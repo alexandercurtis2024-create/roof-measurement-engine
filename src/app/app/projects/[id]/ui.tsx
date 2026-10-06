@@ -7,7 +7,7 @@ const PropertyMap = dynamic(() => import("@/components/PropertyMap").then((m) =>
 function friendlyConfidence(c?: string) {
   if (c === "high") return { title: "High confidence", body: "Good source data. Review before ordering materials." };
   if (c === "moderate") return { title: "Review recommended", body: "Automatic result available. Verify before ordering." };
-  if (c === "low") return { title: "Verify manually", body: "Automatic data is thin. Check the roof before using these numbers." };
+  if (c === "low") return { title: "Verify manually", body: "This tile does not label buildings. The number is an estimate from planar points. Check the roof before ordering." };
   return null;
 }
 export function ProjectWorkspace({ payload }: { payload: any }) {
@@ -56,7 +56,7 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
       if (latest) setJobSnap(latest);
       if (latest && latest.status === "complete") window.location.reload();
       else if (latest && latest.status !== "failed") setTimeout(poll, 4000);
-      else if (latest && latest.status === "failed") setMsg(latest.error || "No roof elevation for this property. Automatic measurement currently covers Anne Arundel County only.");
+      else if (latest && latest.status === "failed") setMsg(latest.error || "No measurable roof elevation for this property.");
     }
     if (jobSnap && !["complete", "failed"].includes(jobSnap.status)) poll();
     return () => { stop = true; };
@@ -86,7 +86,7 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
       ) : null}
       {lidarArea && !running ? (
         <Card className="p-5">
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">Measurement complete</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-copper-800">{lidarArea?.origin === "estimated" ? "Estimate — verify before ordering" : "Measurement complete"}</div>
           <div className="mt-3 text-5xl font-semibold tracking-tight">{areaDisplay?.replace(" sq ft", "")}</div>
           <div className="text-sm font-medium text-ink-700/70">SQ FT</div>
           <div className="mt-4 grid grid-cols-2 gap-4">
