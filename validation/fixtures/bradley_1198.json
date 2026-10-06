@@ -1,0 +1,33 @@
+{
+  "id": "bradley_1198",
+  "address": "1198 Bradley Road, Severn, MD 21144",
+  "county": "Anne Arundel",
+  "lon": -76.6811908,
+  "lat": 39.1230527,
+  "report": "73143704",
+  "ordered_as": "residential",
+  "engine_run": {
+    "blind": true,
+    "algorithmVersion": "v1.0.0-cand",
+    "dataset": "noaa-10311-anne-arundel-2020",
+    "raw_points": 104854,
+    "roof_points": 3650,
+    "facet_count": 12,
+    "area_sqft": 2501.168553659218,
+    "squares": 25.011685536592182,
+    "pitch_rise": 7.20086178544297,
+    "area_mode": "MEASURED",
+    "pitch_mode": "MEASURED"
+  },
+  "eagleview_eval_only": {
+    "area_sqft": 2589,
+    "facets": 8,
+    "predominant_pitch": "7/12",
+    "pitch_area": {"7/12": 2224.3, "10/12": 364.1},
+    "ridges_ft": 74,
+    "hips_ft": 3,
+    "valleys_ft": 46,
+    "rakes_ft": 173,
+    "eaves_ft": 101
+  }
+}
