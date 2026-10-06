@@ -1,0 +1,27 @@
+{
+  "id": "copper_beech_15621",
+  "address": "15621 Copper Beech Drive, Upper Marlboro, MD 20774",
+  "county": "Prince George's",
+  "lon": -76.7335402,
+  "lat": 38.8553466,
+  "report": "70956629",
+  "ordered_as": "residential",
+  "engine_run": {
+    "blind": true,
+    "tiles_tried": ["noaa-10311-anne-arundel-2020", "usgs-md-va-ncb-2020"],
+    "result": "UNAVAILABLE",
+    "reason": "no_points_in_tile",
+    "note": "Anne Arundel bbox is wide enough to include this Prince George's address. That tile and the central Maryland tile both returned no points at the house."
+  },
+  "eagleview_eval_only": {
+    "area_sqft": 2890,
+    "facets": 10,
+    "predominant_pitch": "7/12",
+    "pitch_area": {"7/12": 2271.6, "9/12": 618.0},
+    "ridges_ft": 89,
+    "hips_ft": 0,
+    "valleys_ft": 25,
+    "rakes_ft": 171,
+    "eaves_ft": 164
+  }
+}
