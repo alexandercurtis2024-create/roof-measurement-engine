@@ -6,14 +6,12 @@ from shapely.geometry import Point, Polygon
 from scipy.spatial import cKDTree
 from ept_crop import crop_ept
 from engine_frozen import VERSION
-from intersect import perimeter_union
-from pipeline import EPT, densify_keep
+from lidar_catalog import select_datasets
+from pipeline import densify_keep
 from reconstruct import extract_roof_candidates, fit_plane, height_above_ground, ransac_planes
 from run_v025 import clip_overlaps
 from run_v026 import connected_component_mask
 from run_v027 import facet_expand
-from run_v040 import lifted_shared
-from run_v051 import parent_abc
 from segment import assign_and_leftover, connected_xy, facet_confidence, second_pass
 
 def _ring(geom):
@@ -33,11 +31,11 @@ def _to_poly(ring, transformer, buf):
         p = p.buffer(buf)
     return None if p.is_empty else p
 
-def _mask(xyz, lon, lat, center_xy, target_geom, neighbor_geoms):
+def _mask(xyz, lon, lat, center_xy, target_geom, neighbor_geoms, epsg):
     ring = _ring(target_geom)
-    if ring is None or center_xy is None:
+    if ring is None or center_xy is None or not epsg:
         return np.ones(len(xyz), dtype=bool)
-    t = Transformer.from_crs("EPSG:4326", "EPSG:26918", always_xy=True)
+    t = Transformer.from_crs("EPSG:4326", f"EPSG:{epsg}", always_xy=True)
     target = _to_poly(ring, t, 4.0)
     if target is None:
         return np.ones(len(xyz), dtype=bool)
@@ -62,17 +60,18 @@ def _mask(xyz, lon, lat, center_xy, target_geom, neighbor_geoms):
         return np.ones(len(xyz), dtype=bool)
     return keep
 
-def measure_targeted(lon, lat, label, target_geom=None, neighbor_geoms=None):
-    crop = crop_ept(EPT, lon, lat, buffer_m=40, max_depth=12)
+def _one(lon, lat, label, target_geom, neighbor_geoms, dataset):
+    crop = crop_ept(dataset["url"], lon, lat, buffer_m=40, max_depth=12)
     if not crop.get("ok") and "xyz" not in crop:
-        return {"ok": False, "error": crop, "label": label}
+        return {"ok": True, "mode": "UNAVAILABLE", "reason": "no_points_in_tile", "dataset": dataset["id"], "label": label}
     xyz, cls = crop["xyz"], crop["classification"]
-    keep = _mask(xyz, lon, lat, crop.get("center_xy"), target_geom, neighbor_geoms)
+    epsg = (crop.get("ept") or {}).get("srs", {}).get("horizontal")
+    keep = _mask(xyz, lon, lat, crop.get("center_xy"), target_geom, neighbor_geoms, epsg)
     xyz, cls = xyz[keep], cls[keep]
     hag = height_above_ground(xyz, cls)
     bld = xyz[(cls == 6) & (hag >= 1.8) & (hag <= 16)]
     if len(bld) < 40:
-        return {"ok": True, "label": label, "algorithmVersion": VERSION, "mode": "UNAVAILABLE", "reason": "insufficient_building_class_points"}
+        return {"ok": True, "label": label, "algorithmVersion": VERSION, "mode": "UNAVAILABLE", "reason": "insufficient_building_class_points", "dataset": dataset["id"], "raw_points": int(len(xyz))}
     keep_idx = connected_component_mask(bld[:, :2], cell=1.2)
     core = bld[keep_idx]
     cand, _, _ = extract_roof_candidates(xyz, cls, 1.8, 16)
@@ -80,7 +79,7 @@ def measure_targeted(lon, lat, label, target_geom=None, neighbor_geoms=None):
     dist, _ = tree.query(cand[:, :2], k=1)
     roof = densify_keep(cand[dist < 2.0], 1.3, 4)
     if len(roof) < 80:
-        return {"ok": True, "label": label, "algorithmVersion": VERSION, "mode": "UNAVAILABLE", "reason": "insufficient_roof_candidates", "roof_points": int(len(roof))}
+        return {"ok": True, "label": label, "algorithmVersion": VERSION, "mode": "UNAVAILABLE", "reason": "insufficient_roof_candidates", "dataset": dataset["id"], "roof_points": int(len(roof))}
     planes, _ = ransac_planes(roof, max_planes=22, iters=650, thresh=0.16, min_points=24)
     kept_p = [p for p in planes if math.degrees(math.acos(max(-1, min(1, abs(p.c))))) <= 55]
     groups, leftover = assign_and_leftover(roof, kept_p, 0.16)
@@ -112,5 +111,16 @@ def measure_targeted(lon, lat, label, target_geom=None, neighbor_geoms=None):
         "predominant_pitch_rise_slope_ge_18deg": pitch,
         "area_mode": "MEASURED" if sloped > 200 else "ESTIMATED",
         "pitch_mode": "MEASURED" if pitch is not None else "UNAVAILABLE",
-        "masked": True,
+        "masked": True, "dataset": dataset["id"],
     }
+
+def measure_targeted(lon, lat, label, target_geom=None, neighbor_geoms=None):
+    datasets = select_datasets(float(lon), float(lat))[:3]
+    if not datasets:
+        return {"ok": True, "mode": "UNAVAILABLE", "reason": "no_maryland_lidar_tile", "label": label}
+    last = None
+    for dataset in datasets:
+        last = _one(lon, lat, label, target_geom, neighbor_geoms, dataset)
+        if last.get("mode") != "UNAVAILABLE":
+            return last
+    return last or {"ok": True, "mode": "UNAVAILABLE", "reason": "no_maryland_lidar_tile", "label": label}
