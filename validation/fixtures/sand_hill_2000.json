@@ -1,0 +1,28 @@
+{
+  "id": "sand_hill_2000",
+  "address": "2000 Sand Hill Road, Marriottsville, MD 21104",
+  "county": "Howard",
+  "lon": -76.9285885,
+  "lat": 39.3162341,
+  "report": "71465934",
+  "ordered_as": "commercial",
+  "engine_run": {
+    "blind": true,
+    "dataset_selected": "usgs-md-va-ncb-2020",
+    "result": "UNAVAILABLE",
+    "reason": "no_points_in_tile",
+    "note": "Tile bounding box contains the address. The only intersecting EPT node had 65 points and none fell in an 80 m crop. No roof number was produced."
+  },
+  "eagleview_eval_only": {
+    "area_sqft": 2203,
+    "area_less_penetrations_sqft": 2201,
+    "facets": 7,
+    "predominant_pitch": "13/12",
+    "ridges_ft": 59,
+    "hips_ft": 0,
+    "valleys_ft": 0,
+    "rakes_ft": 137,
+    "eaves_ft": 125,
+    "penetrations": 2
+  }
+}
