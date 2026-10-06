@@ -1,0 +1,28 @@
+{
+  "id": "halsey_114",
+  "address": "114 Halsey Dr, Salisbury, MD 21804",
+  "county": "Wicomico",
+  "lon": -75.597119,
+  "lat": 38.342471,
+  "report": "73134654",
+  "ordered_as": "residential",
+  "engine_run": {
+    "blind": true,
+    "algorithmVersion": "v1.0.0-cand",
+    "dataset": "usgs-md-southeast-2019",
+    "raw_points": 5171,
+    "class_counts": {"1": 756, "2": 4415},
+    "result": "UNAVAILABLE",
+    "reason": "insufficient_building_class_points",
+    "note": "Tile has returns at the house. None are classified as building (class 6). Engine refused rather than treating unclassified points as roof."
+  },
+  "eagleview_eval_only": {
+    "area_sqft": 938,
+    "facets": 2,
+    "predominant_pitch": "5/12",
+    "ridges_hips_ft": 32,
+    "valleys_ft": 0,
+    "rakes_ft": 59,
+    "eaves_ft": 64
+  }
+}
