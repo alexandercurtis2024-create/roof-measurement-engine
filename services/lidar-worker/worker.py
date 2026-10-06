@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, os, sys, urllib.request
 from engine_frozen import VERSION
 from measure_targeted import measure_targeted
-WORKER_VERSION = "2026-10-06-reason"
+WORKER_VERSION = "2026-10-06-statewide"
 
 def api(method, path, body=None):
     base = os.environ["APP_BASE_URL"].rstrip("/")
@@ -19,8 +19,10 @@ def api(method, path, body=None):
 
 def contractor_reason(rec):
     reason = rec.get("reason") or rec.get("error") or "engine unavailable"
-    if reason in ("insufficient_building_class_points", "insufficient_roof_candidates"):
-        return "No roof elevation for this property. Automatic measurement currently uses 2020 Anne Arundel County LiDAR only."
+    if reason == "no_maryland_lidar_tile":
+        return "No public roof elevation tile covers this property yet."
+    if reason in ("insufficient_building_class_points", "insufficient_roof_candidates", "no_points_in_tile"):
+        return "A LiDAR tile was found, but it did not contain a measurable roof for this house."
     return str(reason)
 
 def main(job_id):
@@ -32,7 +34,7 @@ def main(job_id):
         return 2
     api("POST", f"/api/measurement-jobs/{job_id}/progress", {"stage": "acquiring_lidar", "progress": 20})
     rec = measure_targeted(float(lon), float(lat), claimed.get("address") or job_id, claimed.get("targetGeometry"), claimed.get("neighborGeometries") or [])
-    print(json.dumps({"ok": rec.get("ok"), "mode": rec.get("mode"), "reason": rec.get("reason"), "roof_points": rec.get("roof_points"), "label": rec.get("label")}), flush=True)
+    print(json.dumps({"ok": rec.get("ok"), "mode": rec.get("mode"), "reason": rec.get("reason"), "dataset": rec.get("dataset"), "roof_points": rec.get("roof_points"), "label": rec.get("label")}), flush=True)
     if not rec.get("ok") or rec.get("mode") == "UNAVAILABLE":
         msg = contractor_reason(rec)
         api("POST", f"/api/measurement-jobs/{job_id}/fail", {"error": msg})
@@ -50,7 +52,7 @@ def main(job_id):
         "facetCount": rec.get("facet_count"),
         "confidence": "moderate",
         "provenance": rec.get("area_mode"),
-        "diagnostics": {"roof_points": rec.get("roof_points"), "masked": rec.get("masked")},
+        "diagnostics": {"roof_points": rec.get("roof_points"), "masked": rec.get("masked"), "dataset": rec.get("dataset")},
     })
     return 0
 
