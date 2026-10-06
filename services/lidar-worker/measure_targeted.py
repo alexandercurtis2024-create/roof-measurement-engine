@@ -13,6 +13,7 @@ from run_v025 import clip_overlaps
 from run_v026 import connected_component_mask
 from run_v027 import facet_expand
 from segment import assign_and_leftover, connected_xy, facet_confidence, second_pass
+from unclassified_roof import estimate_unclassified
 
 def _ring(geom):
     if not geom:
@@ -123,4 +124,10 @@ def measure_targeted(lon, lat, label, target_geom=None, neighbor_geoms=None):
         last = _one(lon, lat, label, target_geom, neighbor_geoms, dataset)
         if last.get("mode") != "UNAVAILABLE":
             return last
+        if last.get("reason") == "insufficient_building_class_points":
+            crop = crop_ept(dataset["url"], float(lon), float(lat), buffer_m=32, max_depth=11)
+            if crop.get("xyz") is not None:
+                est = estimate_unclassified(crop["xyz"], crop["classification"], dataset["id"], label)
+                if est and est.get("total_sloped_sqft", 0) >= 200:
+                    return est
     return last or {"ok": True, "mode": "UNAVAILABLE", "reason": "no_maryland_lidar_tile", "label": label}
