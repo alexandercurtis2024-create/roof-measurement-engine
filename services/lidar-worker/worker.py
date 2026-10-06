@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, os, sys, urllib.request
 from engine_frozen import VERSION
 from measure_targeted import measure_targeted
-WORKER_VERSION = "2026-10-06-statewide"
+WORKER_VERSION = "2026-10-06-unclassified"
 
 def api(method, path, body=None):
     base = os.environ["APP_BASE_URL"].rstrip("/")
@@ -21,6 +21,8 @@ def contractor_reason(rec):
     reason = rec.get("reason") or rec.get("error") or "engine unavailable"
     if reason == "no_maryland_lidar_tile":
         return "No public roof elevation tile covers this property yet."
+    if reason == "unclassified_planar_points":
+        return "Elevation was found, but this tile does not label buildings. The area is an estimate from planar points and should be verified."
     if reason in ("insufficient_building_class_points", "insufficient_roof_candidates", "no_points_in_tile"):
         return "A LiDAR tile was found, but it did not contain a measurable roof for this house."
     return str(reason)
@@ -42,6 +44,7 @@ def main(job_id):
         return 3
     raw = rec.get("predominant_pitch_rise_slope_ge_18deg")
     display = f"≈ {round(raw)}/12" if raw is not None else "unavailable"
+    estimated = rec.get("area_mode") == "ESTIMATED"
     api("POST", f"/api/measurement-jobs/{job_id}/complete", {
         "engineVersion": rec.get("algorithmVersion") or VERSION,
         "workerVersion": WORKER_VERSION,
@@ -50,8 +53,9 @@ def main(job_id):
         "predominantPitchRaw": raw,
         "predominantPitchDisplay": display,
         "facetCount": rec.get("facet_count"),
-        "confidence": "moderate",
+        "confidence": "low" if estimated else "moderate",
         "provenance": rec.get("area_mode"),
+        "dataset": rec.get("dataset"),
         "diagnostics": {"roof_points": rec.get("roof_points"), "masked": rec.get("masked"), "dataset": rec.get("dataset")},
     })
     return 0
