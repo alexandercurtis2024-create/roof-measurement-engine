@@ -56,7 +56,7 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
       if (latest) setJobSnap(latest);
       if (latest && latest.status === "complete") window.location.reload();
       else if (latest && latest.status !== "failed") setTimeout(poll, 4000);
-      else if (latest && latest.status === "failed") setMsg("Measurement could not finish. Try Measure roof again.");
+      else if (latest && latest.status === "failed") setMsg(latest.error || "No roof elevation for this property. Automatic measurement currently covers Anne Arundel County only.");
     }
     if (jobSnap && !["complete", "failed"].includes(jobSnap.status)) poll();
     return () => { stop = true; };
