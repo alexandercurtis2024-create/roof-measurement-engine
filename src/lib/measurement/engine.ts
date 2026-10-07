@@ -112,9 +112,9 @@ export function recommendMaterials(opts: {
     lines: [
       { item: "Shingles", qty: Math.ceil(squaresWithWaste * opts.bundlesPerSquare), unit: "bundles", basis: `${squaresWithWaste.toFixed(2)} squares incl. waste`, origin: "derived" },
       { item: "Underlayment", qty: Math.ceil(squaresWithWaste / opts.underlaymentSqPerRoll), unit: "rolls", basis: "squares incl. waste / roll coverage", origin: "derived" },
-      { item: "Starter", qty: Math.ceil(opts.perimeterFt / opts.starterFtPerBundle), unit: "bundles", basis: "perimeter / starter coverage", origin: "estimated" },
-      { item: "Drip edge", qty: Math.ceil(opts.perimeterFt / opts.dripEdgeFtPerPiece), unit: "pieces", basis: "perimeter / piece length", origin: "estimated" },
-      { item: "Ice & water barrier", qty: Math.ceil((opts.perimeterFt * 6) / opts.iceWaterSqFtPerRoll), unit: "rolls", basis: "6 ft band × full 2D perimeter (assumption)", origin: "estimated" },
+      { item: "Starter", qty: null, unit: "bundles", basis: "Footprint perimeter is not eave length", origin: "unavailable" },
+      { item: "Drip edge", qty: null, unit: "pieces", basis: "Footprint perimeter is not eave plus rake", origin: "unavailable" },
+      { item: "Ice & water barrier", qty: null, unit: "rolls", basis: "Requires a gated eave length", origin: "unavailable" },
       { item: "Ridge cap", qty: null, unit: "bundles", basis: "Ridge and hip lengths unavailable", origin: "unavailable" },
     ],
   };

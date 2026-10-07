@@ -5,7 +5,8 @@ from pyproj import Transformer
 from shapely.geometry import Point, Polygon
 from scipy.spatial import cKDTree
 from ept_crop import crop_ept
-from engine_frozen import VERSION
+from engine_frozen import VERSION, measure as frozen_measure
+from imagery_chm import estimate_imagery
 from lidar_catalog import select_datasets
 from pipeline import densify_keep
 from reconstruct import extract_roof_candidates, fit_plane, height_above_ground, ransac_planes
@@ -115,19 +116,53 @@ def _one(lon, lat, label, target_geom, neighbor_geoms, dataset):
         "masked": True, "dataset": dataset["id"],
     }
 
+def _unclassified(crop_xyz, crop_cls, dataset_id, label):
+    est = estimate_unclassified(crop_xyz, crop_cls, dataset_id, label)
+    if not est or est.get("total_sloped_sqft", 0) < 200:
+        return None
+    est["area_mode"] = "ESTIMATED"
+    est["pitch_mode"] = est.get("pitch_mode") or "ESTIMATED"
+    est["confidence"] = "low"
+    return est
+
 def measure_targeted(lon, lat, label, target_geom=None, neighbor_geoms=None):
+    """Select a tile and mask to the building. Building-class numbers come only from engine_frozen.measure."""
     datasets = select_datasets(float(lon), float(lat))[:3]
     if not datasets:
         return {"ok": True, "mode": "UNAVAILABLE", "reason": "no_maryland_lidar_tile", "label": label}
     last = None
     for dataset in datasets:
-        last = _one(lon, lat, label, target_geom, neighbor_geoms, dataset)
-        if last.get("mode") != "UNAVAILABLE":
-            return last
-        if last.get("reason") == "insufficient_building_class_points":
-            crop = crop_ept(dataset["url"], float(lon), float(lat), buffer_m=32, max_depth=11)
-            if crop.get("xyz") is not None:
-                est = estimate_unclassified(crop["xyz"], crop["classification"], dataset["id"], label)
-                if est and est.get("total_sloped_sqft", 0) >= 200:
-                    return est
+        crop = crop_ept(dataset["url"], float(lon), float(lat), buffer_m=40, max_depth=12)
+        if crop.get("xyz") is None:
+            last = {"ok": True, "mode": "UNAVAILABLE", "reason": "no_points_in_tile", "dataset": dataset["id"], "label": label}
+            continue
+        xyz, cls = crop["xyz"], crop["classification"]
+        epsg = (crop.get("ept") or {}).get("srs", {}).get("horizontal")
+        keep = _mask(xyz, float(lon), float(lat), crop.get("center_xy"), target_geom, neighbor_geoms, epsg)
+        xyz, cls = xyz[keep], cls[keep]
+        class6 = int((cls == 6).sum())
+        if dataset.get("building_class") and class6 >= 40:
+            rec = frozen_measure(float(lon), float(lat), label, ept=dataset["url"])
+            rec["dataset"] = dataset["id"]
+            rec["masked"] = True
+            if rec.get("mode") == "UNAVAILABLE" or rec.get("area_mode") != "MEASURED":
+                last = rec
+                if rec.get("reason") == "insufficient_building_class_points":
+                    est = _unclassified(xyz, cls, dataset["id"], label)
+                    if est:
+                        return est
+                continue
+            return rec
+        last = {"ok": True, "mode": "UNAVAILABLE", "reason": "insufficient_building_class_points", "dataset": dataset["id"], "label": label, "raw_points": int(len(xyz)), "building_class6": class6}
+        est = _unclassified(xyz, cls, dataset["id"], label)
+        if est:
+            return est
+    try:
+        imagery = estimate_imagery(float(lon), float(lat), label)
+    except Exception:
+        imagery = None
+    if imagery and imagery.get("total_sloped_sqft", 0) >= 200:
+        imagery["area_mode"] = "imagery_estimate"
+        imagery["confidence"] = "low"
+        return imagery
     return last or {"ok": True, "mode": "UNAVAILABLE", "reason": "no_maryland_lidar_tile", "label": label}

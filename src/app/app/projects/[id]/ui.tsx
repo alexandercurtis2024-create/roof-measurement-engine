@@ -22,6 +22,7 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
   const [msg, setMsg] = useState("");
   const [showVerify, setShowVerify] = useState(false);
   const [showMap, setShowMap] = useState(project.status === "needs_building_selection");
+  const [confirmEstimate, setConfirmEstimate] = useState(false);
   const liveJobs = (jobs || []).filter((j: any) => j.stage !== "footprint_retrieved");
   const [jobSnap, setJobSnap] = useState(liveJobs[0] || null);
   const parsedBuildings = useMemo(() => buildings.map((b: any) => ({ ...b, geom: JSON.parse(b.geometry) })), [buildings]);
@@ -114,7 +115,9 @@ export function ProjectWorkspace({ payload }: { payload: any }) {
           <div className="flex flex-wrap gap-2">{["10","12","15"].map((w) => (
             <button key={w} onClick={() => setWaste(w)} className={`min-h-11 rounded-full px-4 text-sm font-semibold ${waste===w?"bg-ink-950 text-white":"bg-white ring-1 ring-black/10"}`}>{w}%</button>
           ))}</div>
-          {lidarSq?.display ? <div><div className="text-xs font-semibold uppercase text-ink-700/60">Ordering squares</div><div className="text-3xl font-semibold">{(Number(lidarSq.display)*(1+Number(waste||0)/100)).toFixed(2)}</div></div> : <p className="text-sm">Measure the roof first.</p>}
+          {lidarArea?.origin === "estimated" || lidarArea?.confidence === "low" ? (
+            confirmEstimate ? <div><div className="text-xs font-semibold uppercase text-ink-700/60">Ordering squares, confirmed</div><div className="text-3xl font-semibold">{(Number(lidarSq?.display||0)*(1+Number(waste||0)/100)).toFixed(2)}</div></div> : <div><p className="text-sm">Estimate — verify before ordering. Waste stays locked until you confirm this is not a measured roof.</p><button className="mt-3 min-h-11 rounded-full bg-ink-950 px-4 text-sm font-semibold text-white" onClick={() => setConfirmEstimate(true)}>Confirm estimate</button></div>
+          ) : lidarSq?.display ? <div><div className="text-xs font-semibold uppercase text-ink-700/60">Ordering squares</div><div className="text-3xl font-semibold">{(Number(lidarSq.display)*(1+Number(waste||0)/100)).toFixed(2)}</div></div> : <p className="text-sm">Measure the roof first. A failed run has no bid number.</p>}
         </Card>
       )}
     </div>

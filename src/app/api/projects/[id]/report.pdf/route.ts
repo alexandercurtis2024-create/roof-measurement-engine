@@ -25,9 +25,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   draw(project.property.normalizedAddress, 16, true);
   draw(`${project.organization.settings?.companyName || project.organization.name}  ·  Engine ${project.algorithmVersion}`);
   y -= 8;
+  draw("Not an EagleView report and not an insurance certification.", 9);
+  draw("Estimated rows are not ordering numbers until verified.", 9);
+  y -= 6;
   draw("Measurements", 13, true);
   for (const m of project.measurements) {
     draw(`${m.label}: ${m.display}  [${m.origin} / ${m.confidence}]`, 10);
+    if (m.notes) draw(String(m.notes), 8);
     if (y < 80) break;
   }
   const bytes = await pdf.save();

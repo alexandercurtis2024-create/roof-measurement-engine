@@ -24,8 +24,23 @@ function centroidOf(geomJson: string | null, fallbackLon: number | null, fallbac
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   if (!workerAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
+  const existing = await prisma.processingJob.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (existing.status === "claimed" || existing.status === "running") {
+    const job = await prisma.processingJob.findUnique({
+      where: { id },
+      include: { project: { include: { property: { include: { buildings: true } } } } },
+    });
+    if (!job?.project.property) return NextResponse.json({ error: "no_property" }, { status: 422 });
+    const p = job.project.property;
+    const selected = p.buildings.find((b) => b.selected) || p.buildings.find((b) => b.isPrimaryCandidate) || p.buildings[0];
+    const neighbors = p.buildings.filter((b) => selected && b.id !== selected.id && (b.rankReason || "").includes("off parcel"));
+    const c = centroidOf(selected?.geometry || null, p.longitude, p.latitude);
+    return NextResponse.json({ id: job.id, lon: c.lon, lat: c.lat, address: p.normalizedAddress, buildingId: selected?.id || null, targetGeometry: selected?.geometry ? JSON.parse(selected.geometry) : null, neighborGeometries: neighbors.map((b) => JSON.parse(b.geometry)), engine: "v1.0.0-cand", alreadyClaimed: true });
+  }
+  if (existing.status !== "queued") return NextResponse.json({ error: "not_claimable" }, { status: 409 });
   const claimed = await prisma.processingJob.updateMany({
-    where: { id, status: { in: ["queued", "claimed", "failed"] } },
+    where: { id, status: "queued" },
     data: { status: "claimed", stage: "claimed", startedAt: new Date(), progress: 5 },
   });
   if (claimed.count !== 1) return NextResponse.json({ error: "not_claimable" }, { status: 409 });

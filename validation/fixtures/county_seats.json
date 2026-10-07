@@ -1,0 +1,7 @@
+{
+  "source": "county-seat crop, not an EagleView input",
+  "measured_building_class": ["Anne Arundel"],
+  "estimate_points_no_class6": ["Allegany", "Caroline", "Charles", "Dorchester", "Howard", "Kent", "Montgomery", "Prince George's", "Somerset", "Talbot", "Washington", "Wicomico", "Worcester"],
+  "unavailable_no_points": ["Baltimore County", "Baltimore City", "Calvert", "Carroll", "Cecil", "Frederick", "Garrett", "Harford", "Queen Anne's", "St. Mary's"],
+  "overlap_not_coverage": "Anne Arundel bbox overlaps part of Prince George's and returned no points at Upper Marlboro. A bbox hit is not coverage."
+}

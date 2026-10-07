@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: deps
-        run: pip install --quiet numpy scipy shapely pyproj laspy lazrs
+        run: pip install --quiet numpy scipy shapely pyproj laspy lazrs rasterio
       - name: run frozen engine
         env:
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
@@ -28,3 +28,20 @@ jobs:
           if [ -z "$APP_BASE_URL" ] || [ -z "$WORKER_SECRET" ]; then echo missing secrets; exit 1; fi
           cd services/lidar-worker
           python worker.py "$JOB_ID"
+      - name: fail job if worker died
+        if: failure()
+        env:
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+          JOB_ID: ${{ github.event.client_payload.jobId || inputs.jobId }}
+        run: |
+          python - << 'PY'
+          import json, os, urllib.request
+          base, secret, job = os.environ.get("APP_BASE_URL"), os.environ.get("WORKER_SECRET"), os.environ.get("JOB_ID")
+          if not base or not secret or not job:
+              print("cannot fail job; secrets missing")
+              raise SystemExit(0)
+          req = urllib.request.Request(base.rstrip("/") + f"/api/measurement-jobs/{job}/fail", data=json.dumps({"error": "worker died before callback"}).encode(), method="POST", headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"})
+          urllib.request.urlopen(req, timeout=30).read()
+          print("failed job", job)
+          PY

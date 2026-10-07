@@ -3,7 +3,7 @@ from __future__ import annotations
 import json, os, sys, urllib.request
 from engine_frozen import VERSION
 from measure_targeted import measure_targeted
-WORKER_VERSION = "2026-10-06-unclassified"
+WORKER_VERSION = "2026-10-07-frozen-path"
 
 def api(method, path, body=None):
     base = os.environ["APP_BASE_URL"].rstrip("/")
@@ -14,8 +14,11 @@ def api(method, path, body=None):
         method=method,
         headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json", "User-Agent": f"rme-worker/{WORKER_VERSION}"},
     )
-    with urllib.request.urlopen(req, timeout=60) as res:
-        return json.loads(res.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=60) as res:
+            return json.loads(res.read().decode())
+    except Exception as exc:
+        raise RuntimeError(f"callback {method} {path} failed: {exc}") from exc
 
 def contractor_reason(rec):
     reason = rec.get("reason") or rec.get("error") or "engine unavailable"
@@ -23,11 +26,24 @@ def contractor_reason(rec):
         return "No public roof elevation tile covers this property yet."
     if reason == "unclassified_planar_points":
         return "Elevation was found, but this tile does not label buildings. The area is an estimate from planar points and should be verified."
+    if reason == "imagery_height_model":
+        return "No building-class roof points were available. This is an imagery height estimate, not a measured roof."
     if reason in ("insufficient_building_class_points", "insufficient_roof_candidates", "no_points_in_tile"):
         return "A LiDAR tile was found, but it did not contain a measurable roof for this house."
     return str(reason)
 
 def main(job_id):
+    try:
+        return _run(job_id)
+    except Exception as exc:
+        try:
+            api("POST", f"/api/measurement-jobs/{job_id}/fail", {"error": str(exc)[:500]})
+        except Exception:
+            print("fail callback also failed", flush=True)
+        print(str(exc), flush=True)
+        return 4
+
+def _run(job_id):
     claimed = api("POST", f"/api/measurement-jobs/{job_id}/claim", {})
     lon, lat = claimed["lon"], claimed["lat"]
     if lon is None or lat is None:
@@ -44,7 +60,7 @@ def main(job_id):
         return 3
     raw = rec.get("predominant_pitch_rise_slope_ge_18deg")
     display = f"≈ {round(raw)}/12" if raw is not None else "unavailable"
-    estimated = rec.get("area_mode") == "ESTIMATED"
+    estimated = rec.get("area_mode") in ("ESTIMATED", "imagery_estimate")
     api("POST", f"/api/measurement-jobs/{job_id}/complete", {
         "engineVersion": rec.get("algorithmVersion") or VERSION,
         "workerVersion": WORKER_VERSION,

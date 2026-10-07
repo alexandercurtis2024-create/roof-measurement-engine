@@ -14,5 +14,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     where: { id },
     data: { status: "failed", stage: "failed", finishedAt: new Date(), log: JSON.stringify(events).slice(0, 12000) },
   });
+  await prisma.measurement.deleteMany({ where: { projectId: job.projectId, key: { in: ["lidar_roof_area", "lidar_squares", "lidar_pitch"] } } });
   return NextResponse.json({ ok: true });
 }
